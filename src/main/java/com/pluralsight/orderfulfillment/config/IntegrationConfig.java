@@ -1,13 +1,15 @@
-package com.pluralsight.orderfulfillment.config;
-
-import java.util.ArrayList;
-import java.util.List;
+package  com.pluralsight.orderfulfillment.config;
 
 import javax.inject.Inject;
+import javax.sql.DataSource;
 
 import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.component.sql.SqlComponent;
 import org.apache.camel.spring.javaconfig.CamelConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
+
+import com.pluralsight.orderfulfillment.order.OrderStatus;
 
 @org.springframework.context.annotation.Configuration
 public class IntegrationConfig extends CamelConfiguration {
@@ -17,39 +19,45 @@ public class IntegrationConfig extends CamelConfiguration {
 	@Inject
 	private Environment environment;
 	
-	@Override
-	public List<RouteBuilder> routes(){
+	@Inject
+	private DataSource dataSource;
+	
+	@Bean
+	public SqlComponent sql(){
+		SqlComponent sqlComponent = 
+				new SqlComponent();
 		
-		List<RouteBuilder> routeList = new ArrayList<RouteBuilder>();
+		sqlComponent.setDataSource(dataSource);
+		return sqlComponent;
 		
+	}
+
+	
+	@Bean
+	public RouteBuilder newWebsiteOrderRoute(){
 		
-		routeList.add(new RouteBuilder() {
+		return new RouteBuilder(){
+			
 			
 			@Override
-			public void configure() throws Exception{
+			public void configure() throws Exception {
 				
 				from(
-						"file://"
-								+ environment
-									.getProperty("order.fulfillment.center.1.outbound.folder") 
-									+ "?noop=true")
-				.to("file://"
-						+ environment
-							.getProperty("order.fulfillment.center.1.outbound.folder")
-						+ "/test");
-						
+						"sql:"
+							+ "select if from orders.\"order\" where status = '"
+							+ OrderStatus.NEW.getCode()
+							+ "'"
+							+ "?"
+							+ "consumer.onConsume=update orders.\"order\" set status = '"
+							+ OrderStatus.PROCESSING.getCode()
+							+ "'"
+							+ "  where id = :#id "
+					).to(
+							"log:com.pluralsight.orderfulfillment.order?level=INFO"
+						);
 				
-			}	
-				
-			
-		});
-		
-		
-		return routeList;
+			}
+		};
 	}
-	
-	
-	
-	
 	
 }
